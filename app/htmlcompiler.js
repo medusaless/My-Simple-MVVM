@@ -16,8 +16,8 @@ var ElementCheck = {
     }
 }
 
-var RegExpressions = {
-    textNodeReg: /{{(.*)}}/
+var REGEXPS = {
+    TEXTNODE: /{{(\w*)}}/g
 };
 
 var Callbacks = {
@@ -25,7 +25,16 @@ var Callbacks = {
         context.value = newValue;
     },
     textnode: function (newValue, name, context) {
-        context.nodeValue = newValue;
+        var regNodeValue = context._beforeCompileValue;
+        var mvvmData = this._mvvm.data;
+
+        Object.keys(mvvmData).forEach(key => {
+            var regKey = new RegExp('{{' + key + '}}','g');
+            var value =  mvvmData[key];
+            regNodeValue = regNodeValue.replace(regKey, value);
+        });
+
+        context.nodeValue = regNodeValue;
     }
 }
 
@@ -35,6 +44,7 @@ export default class HTMLCompiler {
         this._listenerManager = listenerManager;
         this.rootElement = document.querySelector(el);
         this.dataElements = [];
+        this._textNodesCache = [];
         if (this.rootElement) {
             this.compile(this.rootElement)
         } else {
@@ -67,18 +77,34 @@ export default class HTMLCompiler {
     }
 
     compileTextNode(element) {
-        if (RegExpressions.textNodeReg.test(element.nodeValue)) {
-            var key = RegExp.$1;
-            this.addToListenerManager(key, Callbacks.textnode, element)
 
-            element.nodeValue = this._mvvm[key];
+        if (element.nodeValue.trim() == '') {
+            return;
         }
+
+        var regNodeValue = element.nodeValue,
+            compliledNodeValue = element.nodeValue,
+            key = '',
+            replacedKey = '',
+            regResult = REGEXPS.TEXTNODE.exec(regNodeValue);
+        element._beforeCompileValue = regNodeValue;
+        while (regResult) {
+            replacedKey = regResult[0];
+            key = regResult[1];
+
+            compliledNodeValue = compliledNodeValue.replace(replacedKey, this._mvvm[key])
+
+            this.addToListenerManager(key, Callbacks.textnode.bind(this), element)
+
+            regResult = REGEXPS.TEXTNODE.exec(regNodeValue);
+        }
+        element.nodeValue = compliledNodeValue;
     }
 
     compileVModel(element) {
         let key = element.getAttribute('v-model');
 
-        this.addToListenerManager(key, Callbacks.vmodel, element)
+        this.addToListenerManager(key, Callbacks.vmodel.bind(this), element)
 
         element.addEventListener('input', () => {
             this._mvvm[key] = element.value;
@@ -91,7 +117,7 @@ export default class HTMLCompiler {
         this._listenerManager.add(new Listener({
             name: key,
             callback: func,
-            context:context
+            context: context
         }));
     }
 }

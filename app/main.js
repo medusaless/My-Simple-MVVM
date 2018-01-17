@@ -1,17 +1,16 @@
-import Vue from './mvvm'
+import MyMVVM from './mvvm'
 
-var ob = new Vue({
+var app = new MyMVVM({
     el:'#app',
     data:{
         name:'liasdf',
         age:123
-    },
-    methods:{
-        changeName(){
-            this.name = 'asdf'
-        }
     }
 });
+
+document.getElementById('btn').onclick=function(){
+   app.name = 'asdf';   
+}
 
 
 // import Listener from './listener'

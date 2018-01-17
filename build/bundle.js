@@ -186,18 +186,17 @@ var _mvvm2 = _interopRequireDefault(_mvvm);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-var ob = new _mvvm2.default({
+var app = new _mvvm2.default({
     el: '#app',
     data: {
         name: 'liasdf',
         age: 123
-    },
-    methods: {
-        changeName: function changeName() {
-            this.name = 'asdf';
-        }
     }
 });
+
+document.getElementById('btn').onclick = function () {
+    app.name = 'asdf';
+};
 
 // import Listener from './listener'
 // import ListenerManager from './listenermanager'
@@ -280,7 +279,7 @@ var MVVM = function () {
         value: function _createDataKeyProxy(data, key, value) {
             Object.defineProperty(this, key, {
                 get: function get() {
-                    return value;
+                    return data[key];
                 },
                 set: function set(newValue) {
                     data[key] = newValue;
@@ -350,11 +349,17 @@ var Observer = function () {
         value: function _defineReactive(data, key, value) {
             var self = this;
 
-            this._listenerManager.add(new _listener2.default({ name: key }));
+            this._listenerManager.add(new _listener2.default({
+                name: key
+            }));
 
             Object.defineProperty(data, key, {
                 set: function set(newValue) {
+                    value = newValue;
                     self._listenerManager.notify(newValue, key);
+                },
+                get: function get() {
+                    return value;
                 }
             });
         }
@@ -424,8 +429,8 @@ var ElementCheck = {
     }
 };
 
-var RegExpressions = {
-    textNodeReg: /{{(.*)}}/
+var REGEXPS = {
+    TEXTNODE: /{{(\w*)}}/g
 };
 
 var Callbacks = {
@@ -433,7 +438,16 @@ var Callbacks = {
         context.value = newValue;
     },
     textnode: function textnode(newValue, name, context) {
-        context.nodeValue = newValue;
+        var regNodeValue = context._beforeCompileValue;
+        var mvvmData = this._mvvm.data;
+
+        Object.keys(mvvmData).forEach(function (key) {
+            var regKey = new RegExp('{{' + key + '}}', 'g');
+            var value = mvvmData[key];
+            regNodeValue = regNodeValue.replace(regKey, value);
+        });
+
+        context.nodeValue = regNodeValue;
     }
 };
 
@@ -445,6 +459,7 @@ var HTMLCompiler = function () {
         this._listenerManager = listenerManager;
         this.rootElement = document.querySelector(el);
         this.dataElements = [];
+        this._textNodesCache = [];
         if (this.rootElement) {
             this.compile(this.rootElement);
         } else {
@@ -484,12 +499,28 @@ var HTMLCompiler = function () {
     }, {
         key: 'compileTextNode',
         value: function compileTextNode(element) {
-            if (RegExpressions.textNodeReg.test(element.nodeValue)) {
-                var key = RegExp.$1;
-                this.addToListenerManager(key, Callbacks.textnode, element);
 
-                element.nodeValue = this._mvvm[key];
+            if (element.nodeValue.trim() == '') {
+                return;
             }
+
+            var regNodeValue = element.nodeValue,
+                compliledNodeValue = element.nodeValue,
+                key = '',
+                replacedKey = '',
+                regResult = REGEXPS.TEXTNODE.exec(regNodeValue);
+            element._beforeCompileValue = regNodeValue;
+            while (regResult) {
+                replacedKey = regResult[0];
+                key = regResult[1];
+
+                compliledNodeValue = compliledNodeValue.replace(replacedKey, this._mvvm[key]);
+
+                this.addToListenerManager(key, Callbacks.textnode.bind(this), element);
+
+                regResult = REGEXPS.TEXTNODE.exec(regNodeValue);
+            }
+            element.nodeValue = compliledNodeValue;
         }
     }, {
         key: 'compileVModel',
@@ -498,7 +529,7 @@ var HTMLCompiler = function () {
 
             var key = element.getAttribute('v-model');
 
-            this.addToListenerManager(key, Callbacks.vmodel, element);
+            this.addToListenerManager(key, Callbacks.vmodel.bind(this), element);
 
             element.addEventListener('input', function () {
                 _this2._mvvm[key] = element.value;

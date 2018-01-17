@@ -19,7 +19,7 @@ export default class MVVM{
     _createDataKeyProxy(data, key, value){
         Object.defineProperty(this, key, {
             get:function(){
-               return value;
+                return data[key];
             },
             set:function(newValue){
                 data[key] = newValue;
