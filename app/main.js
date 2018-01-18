@@ -3,8 +3,8 @@ import MyMVVM from './mvvm'
 var app = new MyMVVM({
     el:'#app',
     data:{
-        name:'liasdf',
-        age:123
+        name:'abcd',
+        age:12322
     }
 });
 

@@ -1,3 +1,6 @@
+var HtmlWebpackPlugin = require('html-webpack-plugin');
+var WebPack=require('webpack');
+
 module.exports = { //注意这里是exports不是export
     entry: __dirname + "/app/main.js", //唯一入口文件，就像Java中的main方法
     output: { //输出目录
@@ -18,7 +21,18 @@ module.exports = { //注意这里是exports不是export
             }
         ]
     },
+    plugins: [
+        new HtmlWebpackPlugin({
+            title: 'Hello World app',
+            template: './app/index.html'
+        }),
+        new WebPack.HotModuleReplacementPlugin()
+    ],
     resolve: {
         extensions: ['.js', '.json', '.scss', '.less', 'jsonp'],
+    },
+    devServer: {
+        historyApiFallback: true,
+        inline: true,//注意：不写hot: true，否则浏览器无法自动更新；也不要写colors:true，progress:true等，webpack2.x已不支持这些
     }
 };

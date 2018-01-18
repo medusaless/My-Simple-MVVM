@@ -20,22 +20,35 @@ var REGEXPS = {
     TEXTNODE: /{{(\w*)}}/g
 };
 
-var Callbacks = {
+var AttrChangeCallbacks = {
     vmodel: function (newValue, name, context) {
         context.value = newValue;
     },
-    textnode: function (newValue, name, context) {
-        var regNodeValue = context._beforeCompileValue;
-        var mvvmData = this._mvvm.data;
+    textnode: function (originNodeValue) {
+        return function (newValue, name, context) {
+            var mvvmData = this._mvvm.data;
+            var compiledNodeValue = originNodeValue;
+            var dataKeys = Object.keys(mvvmData);
 
-        Object.keys(mvvmData).forEach(key => {
-            var regKey = new RegExp('{{' + key + '}}','g');
-            var value =  mvvmData[key];
-            regNodeValue = regNodeValue.replace(regKey, value);
-        });
-
-        context.nodeValue = regNodeValue;
+            for (let key of dataKeys) {
+                var tokenReg = new RegExp('{{(' + key + ')}}','g');
+                compiledNodeValue = replaceToken(tokenReg, compiledNodeValue, this._mvvm.data);
+            }
+            context.nodeValue = compiledNodeValue;
+        }
     }
+}
+
+
+var replaceToken = function (tokenReg, str, data) {
+    debugger;
+    var dataKey = '';
+    var regResult = tokenReg.exec(str);
+    if (regResult) {
+        dataKey = regResult[1];
+        str = str.replace(tokenReg, data[dataKey]);
+    }
+    return str;
 }
 
 export default class HTMLCompiler {
@@ -77,43 +90,40 @@ export default class HTMLCompiler {
     }
 
     compileTextNode(element) {
-
-        if (element.nodeValue.trim() == '') {
+        var textNodeValue = element.nodeValue.trim();
+        if (textNodeValue == '') {
             return;
         }
 
-        var regNodeValue = element.nodeValue,
-            compliledNodeValue = element.nodeValue,
-            key = '',
-            replacedKey = '',
-            regResult = REGEXPS.TEXTNODE.exec(regNodeValue);
-        element._beforeCompileValue = regNodeValue;
-        while (regResult) {
-            replacedKey = regResult[0];
-            key = regResult[1];
+        var mvvmData = this._mvvm.data;
+        var compiledNodeValue = textNodeValue;
+        var originNodeValue = textNodeValue;
+        var tokenKey = '',
+            datakey = '';
 
-            compliledNodeValue = compliledNodeValue.replace(replacedKey, this._mvvm[key])
+        var regOneKeyResult = REGEXPS.TEXTNODE.exec(compiledNodeValue);
 
-            this.addToListenerManager(key, Callbacks.textnode.bind(this), element)
-
-            regResult = REGEXPS.TEXTNODE.exec(regNodeValue);
+        while (regOneKeyResult) {
+            datakey = regOneKeyResult[1];
+            var tokenReg = new RegExp('{{(' + datakey + ')}}','g');
+            compiledNodeValue = replaceToken(tokenReg, compiledNodeValue, mvvmData)
+            this.addTokenListener(datakey, AttrChangeCallbacks.textnode(originNodeValue).bind(this), element);
+            regOneKeyResult = REGEXPS.TEXTNODE.exec(compiledNodeValue);
         }
-        element.nodeValue = compliledNodeValue;
+      
+        element.nodeValue = compiledNodeValue;
     }
 
     compileVModel(element) {
         let key = element.getAttribute('v-model');
-
-        this.addToListenerManager(key, Callbacks.vmodel.bind(this), element)
-
         element.addEventListener('input', () => {
             this._mvvm[key] = element.value;
         });
-
         element.value = this._mvvm[key];
+        this.addTokenListener(key, AttrChangeCallbacks.vmodel.bind(this), element)
     }
 
-    addToListenerManager(key, func, context) {
+    addTokenListener(key, func, context) {
         this._listenerManager.add(new Listener({
             name: key,
             callback: func,

@@ -190,7 +190,7 @@ var app = new _mvvm2.default({
     el: '#app',
     data: {
         name: 'liasdf',
-        age: 123
+        age: 12322
     }
 });
 
@@ -433,22 +433,56 @@ var REGEXPS = {
     TEXTNODE: /{{(\w*)}}/g
 };
 
-var Callbacks = {
+var AttrChangeCallbacks = {
     vmodel: function vmodel(newValue, name, context) {
         context.value = newValue;
     },
-    textnode: function textnode(newValue, name, context) {
-        var regNodeValue = context._beforeCompileValue;
-        var mvvmData = this._mvvm.data;
+    textnode: function textnode(originNodeValue) {
+        return function (newValue, name, context) {
+            var mvvmData = this._mvvm.data;
+            var compiledNodeValue = originNodeValue;
+            var dataKeys = Object.keys(mvvmData);
 
-        Object.keys(mvvmData).forEach(function (key) {
-            var regKey = new RegExp('{{' + key + '}}', 'g');
-            var value = mvvmData[key];
-            regNodeValue = regNodeValue.replace(regKey, value);
-        });
+            var _iteratorNormalCompletion = true;
+            var _didIteratorError = false;
+            var _iteratorError = undefined;
 
-        context.nodeValue = regNodeValue;
+            try {
+                for (var _iterator = dataKeys[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+                    var key = _step.value;
+
+                    var tokenReg = new RegExp('{{(' + key + ')}}', 'g');
+                    compiledNodeValue = replaceToken(tokenReg, compiledNodeValue, this._mvvm.data);
+                }
+            } catch (err) {
+                _didIteratorError = true;
+                _iteratorError = err;
+            } finally {
+                try {
+                    if (!_iteratorNormalCompletion && _iterator.return) {
+                        _iterator.return();
+                    }
+                } finally {
+                    if (_didIteratorError) {
+                        throw _iteratorError;
+                    }
+                }
+            }
+
+            context.nodeValue = compiledNodeValue;
+        };
     }
+};
+
+var replaceToken = function replaceToken(tokenReg, str, data) {
+    debugger;
+    var dataKey = '';
+    var regResult = tokenReg.exec(str);
+    if (regResult) {
+        dataKey = regResult[1];
+        str = str.replace(tokenReg, data[dataKey]);
+    }
+    return str;
 };
 
 var HTMLCompiler = function () {
@@ -499,28 +533,28 @@ var HTMLCompiler = function () {
     }, {
         key: 'compileTextNode',
         value: function compileTextNode(element) {
-
-            if (element.nodeValue.trim() == '') {
+            var textNodeValue = element.nodeValue.trim();
+            if (textNodeValue == '') {
                 return;
             }
 
-            var regNodeValue = element.nodeValue,
-                compliledNodeValue = element.nodeValue,
-                key = '',
-                replacedKey = '',
-                regResult = REGEXPS.TEXTNODE.exec(regNodeValue);
-            element._beforeCompileValue = regNodeValue;
-            while (regResult) {
-                replacedKey = regResult[0];
-                key = regResult[1];
+            var mvvmData = this._mvvm.data;
+            var compiledNodeValue = textNodeValue;
+            var originNodeValue = textNodeValue;
+            var tokenKey = '',
+                datakey = '';
 
-                compliledNodeValue = compliledNodeValue.replace(replacedKey, this._mvvm[key]);
+            var regOneKeyResult = REGEXPS.TEXTNODE.exec(compiledNodeValue);
 
-                this.addToListenerManager(key, Callbacks.textnode.bind(this), element);
-
-                regResult = REGEXPS.TEXTNODE.exec(regNodeValue);
+            while (regOneKeyResult) {
+                datakey = regOneKeyResult[1];
+                var tokenReg = new RegExp('{{(' + datakey + ')}}', 'g');
+                compiledNodeValue = replaceToken(tokenReg, compiledNodeValue, mvvmData);
+                this.addTokenListener(datakey, AttrChangeCallbacks.textnode(originNodeValue).bind(this), element);
+                regOneKeyResult = REGEXPS.TEXTNODE.exec(compiledNodeValue);
             }
-            element.nodeValue = compliledNodeValue;
+
+            element.nodeValue = compiledNodeValue;
         }
     }, {
         key: 'compileVModel',
@@ -528,18 +562,15 @@ var HTMLCompiler = function () {
             var _this2 = this;
 
             var key = element.getAttribute('v-model');
-
-            this.addToListenerManager(key, Callbacks.vmodel.bind(this), element);
-
             element.addEventListener('input', function () {
                 _this2._mvvm[key] = element.value;
             });
-
             element.value = this._mvvm[key];
+            this.addTokenListener(key, AttrChangeCallbacks.vmodel.bind(this), element);
         }
     }, {
-        key: 'addToListenerManager',
-        value: function addToListenerManager(key, func, context) {
+        key: 'addTokenListener',
+        value: function addTokenListener(key, func, context) {
             this._listenerManager.add(new _listener2.default({
                 name: key,
                 callback: func,
